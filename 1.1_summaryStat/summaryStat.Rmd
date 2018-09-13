@@ -1,0 +1,206 @@
+---
+title: "Summary Statistics in Time Series"
+output:
+  github_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Introduction
+In this tutorial, you get familiarised with the basic ideas of time series data (autococariation, correalogram, Ljung-Box test, etc, along with manupulation techiniques in xts package), using Japanese financial data from Jan 1975 to Dec 1995. Dataset contains 10-year bond return (end of month), 3-month Tokyo Interbank Offerd Rate (TIBOR) and Collaterised overnight call rate (montly average).  
+
+
+### Libraries to be used  
+R offers a variety of useful packages for data manupulation including `magrittr` and `tidyverse` (`tidyverse` is a collection of packages such as `dplyr` and `ggplot2`, which are two of my favorite packages in R). For time series analysis, `xts` is very handy. `xts` stands for _extented time series_, which combines matrix/dataframe with time-stamped index.   
+  
+
+```{r import-packages, message=F, warning=F}
+library(magrittr)
+library(tidyverse)
+library(xts)
+```
+
+### Importing dataset  
+Then we import the dataset and compute the spread, which is the difference of 10-year bond return and 3-month TIBOR.  
+```{r data-import-manipulation}
+dat<- read.csv("~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/spreadCall.csv", 
+               header=F, skip=2, stringsAsFactors = F) %>% 
+  set_colnames(c('date','tenYearBond', 'TIBOR', 'call')) %>% 
+  mutate(spread=tenYearBond-TIBOR) 
+datXts <- xts(dat[,c(4,5)], order.by = as.yearmon(dat[,1], format="%Y/%m"))
+```
+
+
+
+
+### Brief look at the data  
+First, let's look at the data. This is a important step to get the grasp of the data we are going to handle.  
+```{r viz}
+plot.xts(datXts, legend.loc = 7)
+first(datXts, "3 months")
+last(datXts, "3 months")
+```
+  
+We can see from Figure that the series is likely to have serial correlation particulary in call series, and negative correlation between the two series.  
+
+### Sample mean
+The sample means of `call` and `spread` are  
+```{r mean}
+colMeans(datXts)
+```
+
+### Variance and covariance
+Next, variance covariance[correlation] matrix gives a bries idea of the data series and their interaction. To get the correlation matrix from variance-covariance matrix, we divide element-wise variance covariance matrix by the standard diviation matrix, which I call `sdMat` (Varinaces[square of standard diviation] on diagonal and the cross product of SDs on off-diagonal).  
+
+
+```{r vcov-correlation}
+div<-scale(datXts, scale=F) # diviation from mean
+# variance-vocariance matrix
+vcov<-t(div)%*%div/(nrow(div)-1) 
+vcov
+# variance 
+sdCall<- sd(datXts$call)
+sdSpread<- sd(datXts$spread)
+sdMat<- matrix(c(sdCall^2, sdCall*sdSpread, sdCall*sdSpread, sdSpread^2),2)
+sdMat
+
+corrMat<- vcov/sdMat
+corrMat
+```
+  
+The results match the insights from the vidualisation. `Call` has a wider diviation from mean than `spread` , there is high negative correlation b/w the two (-.76)  
+
+
+### Time dependencies
+In addition to mean, variance and covariance, it is important to report autocovariance since time series data is characterised by its time-dependent order.  
+Auto-variance covariance matrix is shown as follows where k represents the lag length.  
+
+$$\left[\begin{array}{cc}cov(spread_t,spread_{t-k}) & cov(spread_t,call_{t-k})\\cov(call_t,spread_{t-k})  & cov(call_t,call_{t-k})\end{array}\right]$$
+
+As examples, I consider k=1 and k=12. 
+```{r autocovariance}
+autoCov_k1<- t(div[2:nrow(datXts),]) %*% div[1:(nrow(datXts)-1),]/(nrow(div)-2) # k=1
+autoCov_k12<- t(div[13:nrow(datXts),]) %*% div[1:(nrow(datXts)-12),]/(nrow(div)-13) # k=12
+
+autoCov_k1
+autoCov_k12
+```
+
+
+```{r autocorrelation}
+autoCov_k1/sdMat
+autoCov_k12/sdMat
+```
+
+As we see from Figure, there seems to be a strong correlation bewteen present and previous observation, particulary in `call` series.  
+
+### Correlogram  
+Correlogram gives a vidual way to see this autocorrelation. (`acf` returns the plot of autocorrelation by default. You can add `plot=F` to get autocorrelation coefficients and `type="cov"` to estimate autocovariance)  
+
+The autocorrelation plot (correlogram) for `call` and `spread` are
+```{r correlogram}
+par(mfrow=c(1,2))
+acf(datXts$call,lag.max = 12)
+acf(datXts$spread,lag.max = 12)
+```
+  
+Blue dotted line shows the critical value for the autocorrelation test. Under the null hypothesis of no autocorrelation, the test statistics (auto correlaiton function) follows standard normal distribution divided by the square root of the number of observations, i.e. $1.96/\sqrt{252}=0.123$. As we see from the correlogram and the correlation matrix, the null hypothesis of no autocorrelation is rejected for all the abservations except 12-lag spread.  
+
+### Ljung-Box test
+One big drawback of correlogram and the test above is that it is a test only for a specic lag (imagin t-test). Ljung-Box test offers a statistical way to examine if any of a group of autocorrelations of a time series data is different from zero. Null hypothesis therefore is that the autocorrelations for up to 12 lags are all zero ($\rho_1 = \rho_2 = .. =\rho_{12} = 0$). We test for lag length of one, six and twelve (k=1, 6 and 12). 
+
+
+```{r Ljung-Box-test}
+# Ljung-Box test
+for (i in c(1,6,12)){
+  print(Box.test(datXts$spread, lag=i, type='L'))
+}
+
+for (i in c(1,6,12)){
+  print(Box.test(datXts$call, lag=i, type='L'))
+}
+```
+  
+The result rejects the null hypothesis at all lags inspected, indicating `call` and `spread` indeed have autocorrelation. 
+  
+  
+
+### First order difference
+Finally, I repeat the same steps, but this time for the first order difference, which I name `call_diff` and `spread_diff`, respectively.  
+
+```{r taking-difference}
+diffsXts<- diff.xts(datXts) %>% 
+  set_colnames(c("call_diff","spread_diff")) %>% 
+  na.omit
+plot.xts(diffsXts,legend.loc = 7)
+first(diffsXts, "3 months")
+last(diffsXts,"3 months")
+```
+
+Serial dependencies are clealy smaller or even insignificant from a vidual inspection.  
+
+The sample means are; 
+```{r diff-mean}
+colMeans(diffsXts)
+```
+  
+Next, we calculate the variance covariance matrix of `spread_diff`,`call_diff`  
+```{r vcov-diff}
+div_diff<-scale(diffsXts, scale=F) # diviation from mean
+vcov_diff<-t(div_diff)%*%div_diff/(nrow(div_diff)-1)
+vcov_diff
+
+sdCall_diff<- sd(diffsXts$call_diff)
+sdSpread_diff<- sd(diffsXts$spread_diff)
+sdMat_diff<- matrix(c(sdCall_diff^2, sdCall_diff*sdSpread_diff, 
+                 sdCall_diff*sdSpread_diff, sdSpread_diff^2),2)
+sdMat_diff
+
+corrMat_diff<- vcov_diff/sdMat_diff
+corrMat_diff
+```
+  
+We still see a sizable negative correlation with -.54. We continue to look at  autocovariance and autocorrelation.  
+```{r autocov-diff}
+autoCov_diff_k1<- t(div_diff[2:nrow(diffsXts),]) %*% 
+  div_diff[1:(nrow(diffsXts)-1),]/(nrow(div_diff)-2) # k=1
+autoCov_diff_k12<- t(div_diff[13:nrow(diffsXts),]) %*% 
+  div_diff[1:(nrow(diffsXts)-12),]/(nrow(div_diff)-13) # k=12
+
+autoCov_diff_k1
+autoCov_diff_k12
+```
+  
+Now, serial dependencies are much smaller than the level series. For clearer look, correlograms are depicted up to 12 lag.  
+
+```{r correlogram-diff}
+par(mfrow=c(1,2))
+acf(diffsXts$call_diff,lag.max = 12)
+acf(diffsXts$spread_diff,lag.max = 12)
+```
+  
+Critical value for autocorrelation test (dotted line) is slightly larger since the first observation is missing ($1.96/\sqrt{251}=0.124$). `Call_diff` shows the sign of autocorrelation at 1, 2, 3, 4 and 6 lags, but smaller than the level series. On the other hand, `spread_diff` doesn't have significant autocorrealtion at any lags inspected.  
+
+
+Again, Ljung-Box test is done to examine the group of autocorrealtions up to 12 lags. 
+```{r LBtest-diff}
+for (i in c(1,6,12)){
+  print(Box.test(diffsXts$call_diff, lag=i, type='L'))
+}
+
+for (i in c(1,6,12)){
+  print(Box.test(diffsXts$spread_diff, lag=i, type='L'))
+}
+
+```
+
+`spread_diff` fails to reject the null hypothesis of no-autocorrelation at lag 1, 6 and 12, while `call_diff` rejects the null at each lag inspected.  
+
+
+### Summary  
+In this tutorial, we looked at the summary statistics for time series data. One defining aspect of time series data is its order and you cannot arbitrarily shuffle them. That makes it important for us to consider its serial dependencies as well the statistics considered in non-TS data (mean, variance, correlation, etc). In examining the autocorrelation, we can use lag-specific test by looking at the autocorrelation/covariance matrix or correlogram. Ljung-Box test is another autocorrelation test that examines whether a group of autocorrelations exist or not ($\rho_1 = \rho_2 = ... =\rho_k = 0$). Finally, we looked the effect of taking difference of the sereis. Most of economic and financial data have some time trend or serial correlation and taking first order difference make them smaller.  
