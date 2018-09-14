@@ -37,6 +37,7 @@ dat<- read.csv("~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/spreadCall.cs
   set_colnames(c('date','tenYearBond', 'TIBOR', 'call')) %>% 
   mutate(spread=tenYearBond-TIBOR) 
 datXts <- xts(dat[,c(4,5)], order.by = as.yearmon(dat[,1], format="%Y/%m"))
+saveRDS(datXts, "~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/datXts.rds")
 ```
 
 ### Brief look at the data
@@ -53,19 +54,19 @@ plot.xts(datXts, legend.loc = 7)
 first(datXts, "3 months")
 ```
 
-    ##           call spread
-    ##  1 1975 12.674  -2.37
-    ##  2 1975 13.000  -4.48
-    ##  3 1975 12.920  -3.93
+    ##            call spread
+    ## Jan 1975 12.674  -2.37
+    ## Feb 1975 13.000  -4.48
+    ## Mar 1975 12.920  -3.93
 
 ``` r
 last(datXts, "3 months")
 ```
 
-    ##         call spread
-    ## 10 1995 0.41   2.29
-    ## 11 1995 0.40   2.29
-    ## 12 1995 0.40   2.57
+    ##          call spread
+    ## Oct 1995 0.41   2.29
+    ## Nov 1995 0.40   2.29
+    ## Dec 1995 0.40   2.57
 
 We can see from Figure that the series is likely to have serial correlation particulary in call series, and negative correlation between the two series.
 
@@ -243,6 +244,7 @@ Finally, I repeat the same steps, but this time for the first order difference, 
 diffsXts<- diff.xts(datXts) %>% 
   set_colnames(c("call_diff","spread_diff")) %>% 
   na.omit
+saveRDS(diffsXts, "~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/diffsXts.rds")
 plot.xts(diffsXts,legend.loc = 7)
 ```
 
@@ -252,19 +254,19 @@ plot.xts(diffsXts,legend.loc = 7)
 first(diffsXts, "3 months")
 ```
 
-    ##         call_diff spread_diff
-    ##  2 1975     0.326       -2.11
-    ##  3 1975    -0.080        0.55
-    ##  4 1975    -0.900        0.76
+    ##          call_diff spread_diff
+    ## Feb 1975     0.326       -2.11
+    ## Mar 1975    -0.080        0.55
+    ## Apr 1975    -0.900        0.76
 
 ``` r
 last(diffsXts,"3 months")
 ```
 
-    ##         call_diff spread_diff
-    ## 10 1995     -0.11       -0.01
-    ## 11 1995     -0.01        0.00
-    ## 12 1995      0.00        0.28
+    ##          call_diff spread_diff
+    ## Oct 1995     -0.11       -0.01
+    ## Nov 1995     -0.01        0.00
+    ## Dec 1995      0.00        0.28
 
 Serial dependencies are clealy smaller or even insignificant from a vidual inspection.
 

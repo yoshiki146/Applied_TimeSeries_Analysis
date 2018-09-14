@@ -33,6 +33,7 @@ dat<- read.csv("~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/spreadCall.cs
   set_colnames(c('date','tenYearBond', 'TIBOR', 'call')) %>% 
   mutate(spread=tenYearBond-TIBOR) 
 datXts <- xts(dat[,c(4,5)], order.by = as.yearmon(dat[,1], format="%Y/%m"))
+saveRDS(datXts, "~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/datXts.rds")
 ```
 
 
@@ -137,6 +138,7 @@ Finally, I repeat the same steps, but this time for the first order difference, 
 diffsXts<- diff.xts(datXts) %>% 
   set_colnames(c("call_diff","spread_diff")) %>% 
   na.omit
+saveRDS(diffsXts, "~/Documents/GitHub/Applied_TimeSeries_Analysis/dat/diffsXts.rds")
 plot.xts(diffsXts,legend.loc = 7)
 first(diffsXts, "3 months")
 last(diffsXts,"3 months")
